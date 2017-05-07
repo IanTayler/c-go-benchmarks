@@ -6,16 +6,14 @@ int SimplRecFib (int n)
 {
     if (n < 2) {
         return 1;
-    } else {
-       return SimplRecFib(n-1) + SimplRecFib(n-2);
     }
+    return SimplRecFib(n-1) + SimplRecFib(n-2);
 }
 
 uint32_t StdintRecFib (int n)
 {
     if (n < 2) {
         return 1;
-    } else {
-       return StdintRecFib(n-1) + StdintRecFib(n-2);
-    }
+    } 
+    return StdintRecFib(n-1) + StdintRecFib(n-2);
 }

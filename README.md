@@ -61,9 +61,62 @@ ok  	github.com/IanTayler/c-go-benchmarks	6.180s
 ```
 As expected, using C functions as a base is much faster even with `MAXTHREADS = 2`, as long as the input number is large enough (i.e. as long as we actually spend a large percentage of the time running the base functions, and not the wrapper Go code).
 
+### Second test: fibonacci with constant input
+Following a suggestion by Dave Cheney (check out [his blog](https://dave.cheney.net/)), I added tests where we always take the same input for the fibonacci function that's being run concurrently. This way, we can see how 'heavy' a function needs to be so that the linear improve of using C outweights the constant overhead of calling it through cgo (and having to convert between Go types and C types in order to call it).
+
+Here are the results.
+```
+###### FIB(1) ######
+BenchmarkConstant1GoRecFib-2         	  200000	      6403 ns/op #Go
+BenchmarkConstant1CSimplRecFib-2     	  200000	      8009 ns/op #C
+BenchmarkConstant1CStdintRecFib-2    	  200000	      8175 ns/op #C stdint.h
+
+###### FIB(2) ######
+BenchmarkConstant2GoRecFib-2         	  300000	      6343 ns/op #Go
+BenchmarkConstant2CSimplRecFib-2     	  200000	      8097 ns/op #C
+BenchmarkConstant2CStdintRecFib-2    	  200000	      8112 ns/op #C stdint.h
+
+###### FIB(5) ######
+BenchmarkConstant5GoRecFib-2         	  200000	      6843 ns/op #Go
+BenchmarkConstant5CSimplRecFib-2     	  200000	      8126 ns/op #C
+BenchmarkConstant5CStdintRecFib-2    	  200000	      8249 ns/op #C stdint.h
+
+###### FIB(7) ######
+BenchmarkConstant7GoRecFib-2         	  200000	      8144 ns/op #Go
+BenchmarkConstant7CSimplRecFib-2     	  200000	      8619 ns/op #C
+BenchmarkConstant7CStdintRecFib-2    	  200000	      8612 ns/op #C stdint.h
+
+###### FIB(10) ######
+BenchmarkConstant10GoRecFib-2        	  100000	     14273 ns/op #Go
+BenchmarkConstant10CSimplRecFib-2    	  200000	     11171 ns/op #C
+BenchmarkConstant10CStdintRecFib-2   	  200000	     11223 ns/op #C stdint.h
+
+###### FIB(20) ######
+BenchmarkConstant20GoRecFib-2        	    5000	    335232 ns/op #Go
+BenchmarkConstant20CSimplRecFib-2    	   10000	    155335 ns/op #C
+BenchmarkConstant20CStdintRecFib-2   	   10000	    155101 ns/op #C stdint.h
+
+###### FIB(30) ######
+BenchmarkConstant30GoRecFib-2        	      30	  45240073 ns/op #Go
+BenchmarkConstant30CSimplRecFib-2    	     100	  18227397 ns/op #C
+BenchmarkConstant30CStdintRecFib-2   	     100	  17661102 ns/op #C stdint.h
+
+###### FIB(40) ######
+BenchmarkConstant40GoRecFib-2        	       1	7457899354 ns/op #Go
+BenchmarkConstant40CSimplRecFib-2    	       1	3032271971 ns/op #C
+BenchmarkConstant40CStdintRecFib-2   	       1	2887700742 ns/op #C stdint.h
+PASS
+ok  	github.com/IanTayler/c-go-benchmarks	50.608s
+```
+Remember a recursive fibonacci function runs in constant time for input <= 2. These results show that even relatively fast functions (rec-fib(10), for example, which is quite fast for I-need-to-lower-this-code-to-C standards) can have a small speed-up using C.
+
+The clear information this gives us is that if you're planning on calling a short, fast function hundreds of times that's **NOT** the function to "lower" to C level. That will actually make your program slower. The cases where you *should* consider using cgo is when you have a very heavy function. In those cases we're seeing x2 and x3 speedups.
+
 ## Preliminary conclusions
 
-We will run many more tests. We have to, before we can advance any real conclusions. As of now, it looks as if this type of C/Go interaction can actually be profitable. The only test we have run so far has shown a great increase of speed when using procedural C functions as a base.
+We will run many more tests. We have to, before we can advance any real conclusions. As of now, it looks as if this type of C/Go interaction can actually be profitable. The only tests we have run so far have shown a great increase of speed when using procedural C functions as a base when we have _heavy_ functions that take a lot of time to complete inside the C code. The constant overhead caused by calling through cgo and having to convert between language-types means it's not worth it if what we're talking about is a fast function we're planning on calling several times.
+
+So, as a rule of thumb: if you minimize the amount of time where you're passing the ball from C to Go and from Go to C, and actually run non-stop for a long time in C, it's possible to see an interesting increase in speed using procedural C code.
 
 Another observation is that using `stdint.h` types instead of the standard C types doesn't alter the performance significantly.
 
