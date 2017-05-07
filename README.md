@@ -10,59 +10,59 @@ The question is: can we find any real improvements in example cases? It's perfec
 
 ### First test: Recursive fibonacci
 
-As a first test, we wrote three simple recursive functions that calculate the n-th fibonacci number. One is written in Go, and called `GoRecFib`. The other two are written in C (wrapped in Go to spit to channel), called `CSimplRecFib` and `CStdintRecFib`. The difference is that the first one uses `int` as a type while the second one uses the `stdint.h` type `uint32_t`.
+As a first test, we wrote three simple recursive functions that calculate the n-th fibonacci number. One is written in Go, and called `GoRecFib`. The other two are written in C (wrapped in Go to spit their return values to a Go channel), called `CSimplRecFib` and `CStdintRecFib`. The difference between them is that the first one uses `int` as the return type while the second one uses the `stdint.h` type `uint32_t`.
 
-`MAXTHREADS` is a constant that sets in how many different threads are we going to run each function. It also sets the amount of times the basic recursive functions are going to be run.
+`MAXTHREADS` is a constant that defines how many different threads we are going to spawn to run our functions. It also sets the amount of times the basic recursive functions are going to be run.
 
 Here are the results:
 ```
 ###### FIRST RUN     ######
 ###### MAXTHREADS: 8 ######
-BenchmarkGoRecFib-2        	      10	 126382177 ns/op
-BenchmarkCSimplRecFib-2    	      30	  46614938 ns/op
-BenchmarkCStdintRecFib-2   	      30	  46631506 ns/op
+BenchmarkGoRecFib-2        	      10	 126382177 ns/op #Go
+BenchmarkCSimplRecFib-2    	      30	  46614938 ns/op #C
+BenchmarkCStdintRecFib-2   	      30	  46631506 ns/op #C stdint.h
 PASS
 ok  	github.com/IanTayler/c-go-benchmarks	4.335s
 
 ###### SECOND RUN    ######
 ###### MAXTHREADS: 8 ######
-BenchmarkGoRecFib-2        	      10	 126112046 ns/op
-BenchmarkCSimplRecFib-2    	      30	  47690399 ns/op
-BenchmarkCStdintRecFib-2   	      30	  48016443 ns/op
+BenchmarkGoRecFib-2        	      10	 126112046 ns/op #Go
+BenchmarkCSimplRecFib-2    	      30	  47690399 ns/op #C
+BenchmarkCStdintRecFib-2   	      30	  48016443 ns/op #C stdint.h
 PASS
 ok  	github.com/IanTayler/c-go-benchmarks	4.418s
 
 ###### THIRD RUN     ######
 ###### MAXTHREADS: 4 ######
-BenchmarkGoRecFib-2        	  100000	     14952 ns/op
-BenchmarkCSimplRecFib-2    	  200000	      9948 ns/op
-BenchmarkCStdintRecFib-2   	  200000	      9558 ns/op
+BenchmarkGoRecFib-2        	  100000	     14952 ns/op #Go
+BenchmarkCSimplRecFib-2    	  200000	      9948 ns/op #C
+BenchmarkCStdintRecFib-2   	  200000	      9558 ns/op #C stdint.h
 PASS
 ok  	github.com/IanTayler/c-go-benchmarks	5.759s
 
 ###### FOURTH RUN    ######
 ###### MAXTHREADS: 2 ######
-BenchmarkGoRecFib-2        	 1000000	      1778 ns/op
-BenchmarkCSimplRecFib-2    	 1000000	      2197 ns/op
-BenchmarkCStdintRecFib-2   	 1000000	      2184 ns/op
+BenchmarkGoRecFib-2        	 1000000	      1778 ns/op #Go
+BenchmarkCSimplRecFib-2    	 1000000	      2197 ns/op #C
+BenchmarkCStdintRecFib-2   	 1000000	      2184 ns/op #C stdint.h
 PASS
 ok  	github.com/IanTayler/c-go-benchmarks	6.237s
 ```
 
-As you can see, in this case there was an actual improvement in speed with the C-based code. The difference is larger the larger the amount of threads is, and Go even performs better when we only run the functions twice. If I had to advance an explanation of that fact, I'd guess it is because a lower MAXTHREADS means we're actually running the functions with a smaller input (because the input we give to the function is in the range `(0 .. MAXTHREADS*5)`), and then the difference linear increase in speed that C gives us gets overshadowed by the constant overhead of having to convert between Go types and C types and, possibly, the overhead of calling a C function from Go.
+As you can see, in this case there was an actual improvement in speed with the C-based code. The difference is larger the larger the amount of threads is, and Go even performs better when we only run the functions twice. If I had to advance an explanation of that fact, I'd guess it is because a lower MAXTHREADS means we're actually running the functions with a smaller input (because the input we give to the function is in the range `(0 .. MAXTHREADS*5)`), and then the linear increase in speed that C gives us gets overshadowed by the constant overhead of having to convert between Go types and C types and, possibly, the overhead of calling a C function from Go.
 
-To test this, let's run the test with `MAXTHREADS = 2` but passing arguments in the range `(30 .. 30+MAXTHREADS)`.
+To test this, let's run the test with `MAXTHREADS = 2` but passing arguments to the fibonacci functions in the range `(30 .. 30+MAXTHREADS)`.
 ```
-BenchmarkGoRecFib-2        	     100	  19034983 ns/op
-BenchmarkCSimplRecFib-2    	     200	   6956307 ns/op
-BenchmarkCStdintRecFib-2   	     200	   6974458 ns/op
+BenchmarkGoRecFib-2        	     100	  19034983 ns/op #Go
+BenchmarkCSimplRecFib-2    	     200	   6956307 ns/op #C
+BenchmarkCStdintRecFib-2   	     200	   6974458 ns/op #C stdint.h
 PASS
 ok  	github.com/IanTayler/c-go-benchmarks	6.180s
 ```
 As expected, using C functions as a base is much faster even with `MAXTHREADS = 2`, as long as the input number is large enough (i.e. as long as we actually spend a large percentage of the time running the base functions, and not the wrapper Go code).
 
 ### Second test: fibonacci with constant input
-Following a suggestion by Dave Cheney (check out [his blog](https://dave.cheney.net/)), I added tests where we always take the same input for the fibonacci function that's being run concurrently. This way, we can see how 'heavy' a function needs to be so that the linear improve of using C outweights the constant overhead of calling it through cgo (and having to convert between Go types and C types in order to call it).
+Following a suggestion by Dave Cheney (check out [his blog](https://dave.cheney.net/)), I added tests where we always take the same input for the fibonacci function that's being run concurrently. This way, we can see how 'heavy' a function needs to be so that the linear improvement of using C outweights the constant overhead of calling it through Go.
 
 Here are the results.
 ```
@@ -108,9 +108,9 @@ BenchmarkConstant40CStdintRecFib-2   	       1	2887700742 ns/op #C stdint.h
 PASS
 ok  	github.com/IanTayler/c-go-benchmarks	50.608s
 ```
-Remember a recursive fibonacci function runs in constant time for input <= 2. These results show that even relatively fast functions (rec-fib(10), for example, which is quite fast for I-need-to-lower-this-code-to-C standards) can have a small speed-up using C.
+Remember a recursive fibonacci function runs in constant time for input <= 2. These results show that even relatively fast functions (rec-fib(10), for example, which is quite fast for _I-need-to-lower-this-code-to-C_ standards) can have a small speed-up using C.
 
-The clear information this gives us is that if you're planning on calling a short, fast function hundreds of times that's **NOT** the function to "lower" to C level. That will actually make your program slower. The cases where you *should* consider using cgo is when you have a very heavy function. In those cases we're seeing x2 and x3 speedups.
+The clear information this gives us is that if you're planning on calling a short, fast function hundreds of times that's **NOT** the function to lower to C level. Doing that would actually make your program slower. The cases where you *should* consider using cgo is when you have a very heavy function. In those cases we're seeing x2 and x3 speedups.
 
 ## Preliminary conclusions
 
